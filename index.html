@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>GTM 影像辨識 Demo</title>
+  <!-- 依賴套件：TensorFlow.js 與 Teachable Machine Image -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto; margin: 16px; }
+    .wrap { max-width: 720px; margin: 0 auto; }
+    #webcam-container { margin-top: 12px; }
+    #label-container div { padding: 6px 0; }
+    .row { display:flex; gap:8px; align-items:center; margin:12px 0; flex-wrap:wrap; }
+    button { padding:10px 14px; border-radius:10px; border:1px solid #ddd; cursor:pointer; }
+    .cta { font-size: 18px; font-weight: 700; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h2>Teachable Machine 影像辨識（自架頁面）</h2>
+    <p>按「開始」授權鏡頭，模型會即時預測分類與信心值。</p>
+    <div class="row">
+      <button id="start">開始</button>
+      <button id="stop" disabled>停止</button>
+      <select id="camera">
+        <option value="user">前鏡頭（自拍）</option>
+        <option value="environment">後鏡頭（主鏡）</option>
+      </select>
+    </div>
+
+    <div id="webcam-container"></div>
+    <div id="label-container"></div>
+    <div id="cta" class="cta">試著比 👍 解鎖折扣碼</div>
+  </div>
+
+  <script>
+    const MODEL_URL = "YOUR_MODEL_URL/"; // 例: https://teachablemachine.withgoogle.com/models/XXXX/
+    let model, webcam, labelContainer, maxPredictions, loopReq;
+
+    async function init() {
+      const modelURL = MODEL_URL + "model.json";
+      const metadataURL = MODEL_URL + "metadata.json";
+
+      // 載入模型
+      model = await tmImage.load(modelURL, metadataURL);
+      maxPredictions = model.getTotalClasses();
+
+      // 設定鏡頭
+      const facingMode = document.getElementById("camera").value;
+      webcam = new tmImage.Webcam(320, 240, false); // width, height, flip
+      await webcam.setup({ facingMode });           // 要求權限 + 指定前/後鏡頭
+      await webcam.play();
+
+      // 介面綁定
+      document.getElementById("webcam-container").innerHTML = "";
+      document.getElementById("webcam-container").appendChild(webcam.canvas);
+
+      labelContainer = document.getElementById("label-container");
+      labelContainer.innerHTML = "";
+      for (let i = 0; i < maxPredictions; i++) {
+        labelContainer.appendChild(document.createElement("div"));
+      }
+
+      // 啟動迴圈
+      loopReq = requestAnimationFrame(loop);
+      document.getElementById("start").disabled = true;
+      document.getElementById("stop").disabled = false;
+    }
+
+    async function loop() {
+      webcam.update();
+      await predict();
+      loopReq = requestAnimationFrame(loop);
+    }
+
+    async function predict() {
+      const predictions = await model.predict(webcam.canvas);
+      // 依信心值排序（大→小）
+      predictions.sort((a, b) => b.probability - a.probability);
+
+      predictions.forEach((p, i) => {
+        labelContainer.childNodes[i].textContent =
+          `${p.className}: ${(p.probability * 100).toFixed(1)}%`;
+      });
+
+      // 🔔 電商互動範例：若辨識到 thumbs_up 機率 > 0.85，顯示折扣碼
+      const top = predictions[0];
+      const cta = document.getElementById("cta");
+      if (top.className.toLowerCase().includes("thumbs") && top.probability > 0.85) {
+        cta.textContent = "🎉 恭喜解鎖折扣碼：AI-LOVE";
+      } else {
+        cta.textContent = "試著比 👍 解鎖折扣碼";
+      }
+    }
+
+    function stop() {
+      try { cancelAnimationFrame(loopReq); } catch(e) {}
+      if (webcam) webcam.stop();
+      document.getElementById("start").disabled = false;
+      document.getElementById("stop").disabled = true;
+    }
+
+    document.getElementById("start").addEventListener("click", init);
+    document.getElementById("stop").addEventListener("click", stop);
+  </script>
+</body>
+</html>
