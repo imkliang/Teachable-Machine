@@ -1,109 +1,252 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>GTM 影像辨識 Demo</title>
-  <!-- 依賴套件：TensorFlow.js 與 Teachable Machine Image -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4/dist/tf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Teachable Machine 影像辨識展示</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
   <style>
-    body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto; margin: 16px; }
-    .wrap { max-width: 720px; margin: 0 auto; }
-    #webcam-container { margin-top: 12px; }
-    #label-container div { padding: 6px 0; }
-    .row { display:flex; gap:8px; align-items:center; margin:12px 0; flex-wrap:wrap; }
-    button { padding:10px 14px; border-radius:10px; border:1px solid #ddd; cursor:pointer; }
-    .cta { font-size: 18px; font-weight: 700; margin-top: 8px; }
+    body {
+      font-family: Arial, "Microsoft JhengHei", sans-serif;
+      margin: 20px;
+      background: #f4f7fb;
+      color: #222;
+    }
+    .container {
+      max-width: 900px;
+      margin: auto;
+      background: white;
+      border-radius: 14px;
+      padding: 24px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+    }
+    h1 {
+      text-align: center;
+      color: #1d4ed8;
+    }
+    .section {
+      margin-top: 24px;
+      padding: 16px;
+      border: 1px solid #ddd;
+      border-radius: 10px;
+    }
+    button {
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-right: 10px;
+      margin-top: 10px;
+    }
+    button:hover {
+      background: #1e40af;
+    }
+    input[type="file"] {
+      margin-top: 10px;
+    }
+    #previewImage, canvas, video {
+      max-width: 100%;
+      border-radius: 10px;
+      margin-top: 12px;
+      border: 1px solid #ccc;
+    }
+    .result-box {
+      margin-top: 16px;
+      padding: 14px;
+      background: #eef4ff;
+      border-radius: 10px;
+    }
+    .top-result {
+      font-size: 1.2rem;
+      font-weight: bold;
+      color: #b91c1c;
+      margin-bottom: 10px;
+    }
+    .prob-item {
+      margin: 6px 0;
+    }
+    .bar-bg {
+      width: 100%;
+      background: #ddd;
+      border-radius: 8px;
+      overflow: hidden;
+      height: 20px;
+    }
+    .bar-fill {
+      height: 20px;
+      background: #3b82f6;
+      color: white;
+      text-align: right;
+      padding-right: 6px;
+      box-sizing: border-box;
+      font-size: 12px;
+      line-height: 20px;
+    }
+    .note {
+      color: #555;
+      font-size: 0.95rem;
+      margin-top: 8px;
+    }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <h2>Teachable Machine 影像辨識（自架頁面）</h2>
-    <p>按「開始」授權鏡頭，模型會即時預測分類與信心值。</p>
-    <div class="row">
-      <button id="start">開始</button>
-      <button id="stop" disabled>停止</button>
-      <select id="camera">
-        <option value="user">前鏡頭（自拍）</option>
-        <option value="environment">後鏡頭（主鏡）</option>
-      </select>
+  <div class="container">
+    <h1>Teachable Machine 影像辨識展示</h1>
+    <p>
+      這是用 Teachable Machine + TensorFlow.js 製作的簡易展示頁。<br>
+      可用於課堂示範：上傳圖片辨識、開啟相機即時辨識。
+    </p>
+
+    <div class="section">
+      <h2>1. 載入模型</h2>
+      <button onclick="loadModel()">載入模型</button>
+      <div id="modelStatus">尚未載入模型</div>
+      <div class="note">請先在程式碼中把 modelURLBase 換成你的模型網址。</div>
     </div>
 
-    <div id="webcam-container"></div>
-    <div id="label-container"></div>
-    <div id="cta" class="cta">試著比 👍 解鎖折扣碼</div>
+    <div class="section">
+      <h2>2. 上傳圖片辨識</h2>
+      <input type="file" id="imageUpload" accept="image/*" />
+      <br>
+      <img id="previewImage" src="" alt="預覽圖片" style="display:none;" />
+      <div id="uploadResult" class="result-box" style="display:none;"></div>
+    </div>
+
+    <div class="section">
+      <h2>3. 相機即時辨識</h2>
+      <button onclick="startCamera()">開啟相機</button>
+      <button onclick="stopCamera()">停止相機</button>
+      <div class="note">iPhone 上請用 Safari 開啟，且需使用 HTTPS 或 localhost。</div>
+      <video id="webcam" autoplay playsinline width="320" height="240" style="display:none;"></video>
+      <div id="cameraResult" class="result-box" style="display:none;"></div>
+    </div>
   </div>
 
   <script>
-    const MODEL_URL = "YOUR_MODEL_URL/"; // 例: https://teachablemachine.withgoogle.com/models/XXXX/
-    let model, webcam, labelContainer, maxPredictions, loopReq;
+    // ======== 請改成你的模型網址 ========
+    const modelURLBase = "https://teachablemachine.withgoogle.com/models/你的模型ID/";
+    // ===================================
 
-    async function init() {
-      const modelURL = MODEL_URL + "model.json";
-      const metadataURL = MODEL_URL + "metadata.json";
+    let model;
+    let maxPredictions;
+    let webcamRunning = false;
+    let stream = null;
 
-      // 載入模型
-      model = await tmImage.load(modelURL, metadataURL);
-      maxPredictions = model.getTotalClasses();
+    async function loadModel() {
+      try {
+        const modelURL = modelURLBase + "model.json";
+        const metadataURL = modelURLBase + "metadata.json";
 
-      // 設定鏡頭
-      const facingMode = document.getElementById("camera").value;
-      webcam = new tmImage.Webcam(320, 240, false); // width, height, flip
-      await webcam.setup({ facingMode });           // 要求權限 + 指定前/後鏡頭
-      await webcam.play();
+        model = await tmImage.load(modelURL, metadataURL);
+        maxPredictions = model.getTotalClasses();
 
-      // 介面綁定
-      document.getElementById("webcam-container").innerHTML = "";
-      document.getElementById("webcam-container").appendChild(webcam.canvas);
-
-      labelContainer = document.getElementById("label-container");
-      labelContainer.innerHTML = "";
-      for (let i = 0; i < maxPredictions; i++) {
-        labelContainer.appendChild(document.createElement("div"));
-      }
-
-      // 啟動迴圈
-      loopReq = requestAnimationFrame(loop);
-      document.getElementById("start").disabled = true;
-      document.getElementById("stop").disabled = false;
-    }
-
-    async function loop() {
-      webcam.update();
-      await predict();
-      loopReq = requestAnimationFrame(loop);
-    }
-
-    async function predict() {
-      const predictions = await model.predict(webcam.canvas);
-      // 依信心值排序（大→小）
-      predictions.sort((a, b) => b.probability - a.probability);
-
-      predictions.forEach((p, i) => {
-        labelContainer.childNodes[i].textContent =
-          `${p.className}: ${(p.probability * 100).toFixed(1)}%`;
-      });
-
-      // 🔔 電商互動範例：若辨識到 thumbs_up 機率 > 0.85，顯示折扣碼
-      const top = predictions[0];
-      const cta = document.getElementById("cta");
-      if (top.className.toLowerCase().includes("thumbs") && top.probability > 0.85) {
-        cta.textContent = "🎉 恭喜解鎖折扣碼：AI-LOVE";
-      } else {
-        cta.textContent = "試著比 👍 解鎖折扣碼";
+        document.getElementById("modelStatus").innerText = "模型載入成功";
+      } catch (error) {
+        document.getElementById("modelStatus").innerText = "模型載入失敗：" + error.message;
+        console.error(error);
       }
     }
 
-    function stop() {
-      try { cancelAnimationFrame(loopReq); } catch(e) {}
-      if (webcam) webcam.stop();
-      document.getElementById("start").disabled = false;
-      document.getElementById("stop").disabled = true;
+    document.getElementById("imageUpload").addEventListener("change", async function (event) {
+      if (!model) {
+        alert("請先載入模型");
+        return;
+      }
+
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const img = document.getElementById("previewImage");
+      img.src = URL.createObjectURL(file);
+      img.style.display = "block";
+
+      img.onload = async () => {
+        await predictImage(img, "uploadResult");
+      };
+    });
+
+    async function predictImage(imageElement, resultElementId) {
+      const prediction = await model.predict(imageElement);
+      showResult(prediction, resultElementId);
     }
 
-    document.getElementById("start").addEventListener("click", init);
-    document.getElementById("stop").addEventListener("click", stop);
+    function showResult(prediction, resultElementId) {
+      const resultDiv = document.getElementById(resultElementId);
+      resultDiv.style.display = "block";
+
+      prediction.sort((a, b) => b.probability - a.probability);
+
+      let html = "";
+      html += `<div class="top-result">辨識結果：${prediction[0].className} (${(prediction[0].probability * 100).toFixed(1)}%)</div>`;
+
+      for (let i = 0; i < prediction.length; i++) {
+        const p = prediction[i];
+        const percent = (p.probability * 100).toFixed(1);
+        html += `
+          <div class="prob-item">
+            <div>${p.className}</div>
+            <div class="bar-bg">
+              <div class="bar-fill" style="width:${percent}%;">${percent}%</div>
+            </div>
+          </div>
+        `;
+      }
+
+      resultDiv.innerHTML = html;
+    }
+
+    async function startCamera() {
+      if (!model) {
+        alert("請先載入模型");
+        return;
+      }
+
+      const video = document.getElementById("webcam");
+
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" },
+          audio: false
+        });
+
+        video.srcObject = stream;
+        video.style.display = "block";
+        webcamRunning = true;
+
+        requestAnimationFrame(loopCameraPrediction);
+      } catch (error) {
+        alert("無法開啟相機：" + error.message);
+        console.error(error);
+      }
+    }
+
+    function stopCamera() {
+      webcamRunning = false;
+      const video = document.getElementById("webcam");
+
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+      }
+
+      video.srcObject = null;
+      video.style.display = "none";
+    }
+
+    async function loopCameraPrediction() {
+      if (!webcamRunning) return;
+
+      const video = document.getElementById("webcam");
+      if (video.readyState === 4) {
+        const prediction = await model.predict(video);
+        showResult(prediction, "cameraResult");
+      }
+
+      requestAnimationFrame(loopCameraPrediction);
+    }
   </script>
 </body>
 </html>
